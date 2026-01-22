@@ -372,7 +372,7 @@ public class TimeRangeIndexTests : IDisposable
         var report = await _vault.CheckAvailabilityAsync(symbol, CandlestickInterval.H1, startTime, endTime);
 
         // Assert
-        report.CoveragePercentage.Should().BeApproximately(100.0, 1.0);
+        report.CoveragePercentage.Should().BeApproximately(1.0, 0.01);
     }
 
     [Fact]
@@ -408,7 +408,7 @@ public class TimeRangeIndexTests : IDisposable
         var report = await _vault.CheckAvailabilityAsync(symbol, CandlestickInterval.H1, queryStart, queryEnd);
 
         // Assert
-        report.CoveragePercentage.Should().BeApproximately(50.0, 5.0);
+        report.CoveragePercentage.Should().BeApproximately(0.5, 0.05);
     }
 
     #endregion

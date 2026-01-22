@@ -46,7 +46,8 @@ public sealed class DataAvailabilityReport
     public int ExpectedCandlesCount { get; init; }
 
     /// <summary>
-    /// Gets the percentage of the queried range that has data coverage.
+    /// Gets the percentage of the queried range that has data coverage (as a ratio from 0.0 to 1.0).
+    /// Use the :P format specifier when displaying (e.g., $"{CoveragePercentage:P2}").
     /// </summary>
     public double CoveragePercentage => CalculateCoverage();
 
@@ -60,6 +61,13 @@ public sealed class DataAvailabilityReport
     /// </summary>
     public bool HasAnyData => AvailableRanges.Count > 0;
 
+    /// <summary>
+    /// Calculates the percentage of coverage for available data within the specified query range.
+    /// </summary>
+    /// <returns>
+    /// A double value representing the proportion of data available relative to the total query duration.
+    /// The result is a number between 0.0 and 1.0, where 1.0 indicates full coverage and 0.0 indicates no coverage.
+    /// </returns>
     private double CalculateCoverage()
     {
         if (QueryStart >= QueryEnd)
@@ -67,15 +75,15 @@ public sealed class DataAvailabilityReport
             return 0.0;
         }
 
-        var totalQueryDuration = (QueryEnd - QueryStart).TotalSeconds;
+        double totalQueryDuration = (QueryEnd - QueryStart).TotalSeconds;
         if (totalQueryDuration <= 0)
         {
             return 0.0;
         }
 
-        var availableDuration = AvailableRanges.Sum(r => r.Duration.TotalSeconds);
-        var coverage = availableDuration / totalQueryDuration * 100.0;
+        double availableDuration = AvailableRanges.Sum(r => r.Duration.TotalSeconds);
+        double coverage = availableDuration / totalQueryDuration;
 
-        return Math.Min(100.0, Math.Max(0.0, coverage));
+        return Math.Min(1.0, Math.Max(0.0, coverage));
     }
 }
