@@ -247,9 +247,9 @@ Example:
 ```
 BenchmarkDotNet v0.13.12, macOS 26.2 (25C56) [Darwin 25.2.0]
 Apple M3 Max, 1 CPU, 14 logical and 14 physical cores
-.NET SDK 9.0.304
-  [Host]   : .NET 9.0.8 (9.0.825.36511), Arm64 RyuJIT AdvSIMD
-  .NET 9.0 : .NET 9.0.8 (9.0.825.36511), Arm64 RyuJIT AdvSIMD
+.NET SDK 10.0.100
+  [Host]   : .NET 10.0.0, Arm64 RyuJIT AdvSIMD
+  .NET 10.0 : .NET 10.0.0, Arm64 RyuJIT AdvSIMD
 ```
 
 | Method             | CandleCount | Mean           | Error       | StdDev       | Gen0       | Gen1      | Gen2      | Allocated   |
