@@ -42,10 +42,7 @@ public sealed class StoragePathResolver
     /// <summary>
     /// Gets the local storage path (inside the project directory).
     /// </summary>
-    private static string GetLocalStoragePath()
-    {
-        return Path.Combine(Directory.GetCurrentDirectory(), "data", "history-vault");
-    }
+    private static string GetLocalStoragePath() => Path.Combine(Directory.GetCurrentDirectory(), "data", "history-vault");
 
     /// <summary>
     /// Gets the directory path for a symbol.
@@ -67,10 +64,7 @@ public sealed class StoragePathResolver
     /// <param name="symbol">The symbol name.</param>
     /// <param name="timeframe">The timeframe.</param>
     /// <returns>The timeframe directory path.</returns>
-    public string GetTimeframePath(StorageScope scope, string symbol, CandlestickInterval timeframe)
-    {
-        return Path.Combine(GetSymbolPath(scope, symbol), timeframe.ToShortCode());
-    }
+    public string GetTimeframePath(StorageScope scope, string symbol, CandlestickInterval timeframe) => Path.Combine(GetSymbolPath(scope, symbol), timeframe.ToShortCode());
 
     /// <summary>
     /// Gets the directory path for a year within a symbol/timeframe.
@@ -80,10 +74,7 @@ public sealed class StoragePathResolver
     /// <param name="timeframe">The timeframe.</param>
     /// <param name="year">The year.</param>
     /// <returns>The year directory path.</returns>
-    public string GetYearPath(StorageScope scope, string symbol, CandlestickInterval timeframe, int year)
-    {
-        return Path.Combine(GetTimeframePath(scope, symbol, timeframe), year.ToString("D4"));
-    }
+    public string GetYearPath(StorageScope scope, string symbol, CandlestickInterval timeframe, int year) => Path.Combine(GetTimeframePath(scope, symbol, timeframe), year.ToString("D4"));
 
     /// <summary>
     /// Gets the file path for a specific month of data.
@@ -124,14 +115,14 @@ public sealed class StoragePathResolver
             yield break;
         }
 
-        var yearDirs = Directory.GetDirectories(timeframePath)
+        IOrderedEnumerable<string> yearDirs = Directory.GetDirectories(timeframePath)
             .Where(d => int.TryParse(Path.GetFileName(d), out _))
             .OrderBy(d => d);
 
         foreach (string yearDir in yearDirs)
         {
-            var files = Directory.GetFiles(yearDir, "*.bin*")
-                .OrderBy(f => Path.GetFileName(f));
+            IOrderedEnumerable<string> files = Directory.GetFiles(yearDir, "*.bin*")
+                .OrderBy(Path.GetFileName);
 
             foreach (string file in files)
             {
@@ -229,7 +220,7 @@ public sealed class StoragePathResolver
         foreach (string dir in Directory.GetDirectories(symbolPath))
         {
             string code = Path.GetFileName(dir);
-            if (TryParseTimeframeCode(code, out var timeframe))
+            if (TryParseTimeframeCode(code, out CandlestickInterval timeframe))
             {
                 yield return timeframe;
             }

@@ -57,29 +57,29 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             throw new ArgumentException("Symbol cannot be empty.", nameof(data));
         }
 
-        var symbolLock = _symbolLocks.GetOrAdd(data.Symbol, _ => new SemaphoreSlim(1, 1));
+        SemaphoreSlim symbolLock = _symbolLocks.GetOrAdd(data.Symbol, _ => new SemaphoreSlim(1, 1));
         await symbolLock.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
-            foreach (var timeframeData in data.Timeframes)
+            foreach (TimeframeV2 timeframeData in data.Timeframes)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var candlesToSave = timeframeData.Candlesticks;
+                List<CandlestickV2> candlesToSave = timeframeData.Candlesticks;
                 if (candlesToSave.Count == 0)
                 {
                     continue;
                 }
 
                 // Determine target timeframes
-                var targetTimeframes = DetermineTargetTimeframes(options, timeframeData);
+                CandlestickInterval[] targetTimeframes = DetermineTargetTimeframes(options, timeframeData);
 
-                foreach (var targetTimeframe in targetTimeframes)
+                foreach (CandlestickInterval targetTimeframe in targetTimeframes)
                 {
                     ct.ThrowIfCancellationRequested();
 
-                    var candles = targetTimeframe == timeframeData.Timeframe
+                    List<CandlestickV2> candles = targetTimeframe == timeframeData.Timeframe
                         ? candlesToSave
                         : _aggregator.Aggregate(candlesToSave, timeframeData.Timeframe, targetTimeframe).ToList();
 
@@ -111,7 +111,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var results = await LoadMultipleAsync(options, ct).ConfigureAwait(false);
+        IReadOnlyList<SymbolDataV2> results = await LoadMultipleAsync(options, ct).ConfigureAwait(false);
         return results.Count > 0 ? results[0] : null;
     }
 
@@ -120,7 +120,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var matchingSymbols = await _symbolIndex.GetMatchingSymbolsAsync(
+        IReadOnlyList<string> matchingSymbols = await _symbolIndex.GetMatchingSymbolsAsync(
             options.Symbol, options.Scope, ct).ConfigureAwait(false);
 
         if (matchingSymbols.Count == 0)
@@ -137,8 +137,8 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
 
         await Parallel.ForEachAsync(matchingSymbols, parallelOptions, async (symbol, token) =>
         {
-            var symbolData = await LoadSymbolDataAsync(symbol, options, token).ConfigureAwait(false);
-            if (symbolData != null && symbolData.Timeframes.Count > 0)
+            SymbolDataV2? symbolData = await LoadSymbolDataAsync(symbol, options, token).ConfigureAwait(false);
+            if (symbolData is { Timeframes.Count: > 0 })
             {
                 results.Add(symbolData);
             }
@@ -166,26 +166,19 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         DateTime start,
         DateTime end,
         StorageScope scope,
-        CancellationToken ct)
-    {
-        return _timeRangeIndex.CheckAvailabilityAsync(symbol, timeframe, start, end, scope, ct);
-    }
+        CancellationToken ct) =>
+        _timeRangeIndex.CheckAvailabilityAsync(symbol, timeframe, start, end, scope, ct);
 
     /// <inheritdoc />
     public Task<(DateTime Earliest, DateTime Latest)?> GetDataBoundsAsync(
         string symbol,
         CandlestickInterval timeframe,
         StorageScope scope,
-        CancellationToken ct = default)
-    {
-        return _timeRangeIndex.GetDataBoundsAsync(symbol, timeframe, scope, ct);
-    }
+        CancellationToken ct = default) =>
+        _timeRangeIndex.GetDataBoundsAsync(symbol, timeframe, scope, ct);
 
     /// <inheritdoc />
-    public Task<bool> HasDataAsync(string symbol, StorageScope scope, CancellationToken ct = default)
-    {
-        return Task.FromResult(_symbolIndex.SymbolExists(symbol, scope));
-    }
+    public Task<bool> HasDataAsync(string symbol, StorageScope scope, CancellationToken ct = default) => Task.FromResult(_symbolIndex.SymbolExists(symbol, scope));
 
     /// <inheritdoc />
     public async Task<bool> HasDataAsync(
@@ -194,22 +187,19 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         StorageScope scope,
         CancellationToken ct = default)
     {
-        var bounds = await GetDataBoundsAsync(symbol, timeframe, scope, ct).ConfigureAwait(false);
+        (DateTime Earliest, DateTime Latest)? bounds = await GetDataBoundsAsync(symbol, timeframe, scope, ct).ConfigureAwait(false);
         return bounds.HasValue;
     }
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<string>> GetMatchingSymbolsAsync(string pattern, CancellationToken ct = default)
-    {
-        return _symbolIndex.GetMatchingSymbolsAsync(pattern, _options.DefaultScope, ct);
-    }
+    public Task<IReadOnlyList<string>> GetMatchingSymbolsAsync(string pattern, CancellationToken ct = default) => _symbolIndex.GetMatchingSymbolsAsync(pattern, _options.DefaultScope, ct);
 
     /// <inheritdoc />
     public Task<IReadOnlyList<CandlestickInterval>> GetAvailableTimeframesAsync(
         string symbol,
         CancellationToken ct = default)
     {
-        return Task.FromResult<IReadOnlyList<CandlestickInterval>>(
+        return Task.FromResult(
             _symbolIndex.GetAvailableTimeframes(symbol, _options.DefaultScope));
     }
 
@@ -261,7 +251,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         _disposed = true;
         _writeLock.Dispose();
 
-        foreach (var lockItem in _symbolLocks.Values)
+        foreach (SemaphoreSlim lockItem in _symbolLocks.Values)
         {
             lockItem.Dispose();
         }
@@ -278,11 +268,11 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         CancellationToken ct)
     {
         // Group candles by year/month
-        var groupedByMonth = candles
+        IOrderedEnumerable<IGrouping<(int Year, int Month), CandlestickV2>> groupedByMonth = candles
             .GroupBy(c => (c.OpenTime.Year, c.OpenTime.Month))
             .OrderBy(g => g.Key);
 
-        foreach (var monthGroup in groupedByMonth)
+        foreach (IGrouping<(int Year, int Month), CandlestickV2> monthGroup in groupedByMonth)
         {
             ct.ThrowIfCancellationRequested();
 
@@ -321,15 +311,15 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             return newCandles;
         }
 
-        var existingCandles = await LoadFileDataAsync(existingPath, ct).ConfigureAwait(false);
+        List<CandlestickV2> existingCandles = await LoadFileDataAsync(existingPath, ct).ConfigureAwait(false);
 
         if (existingCandles.Count == 0)
         {
             return newCandles;
         }
 
-        var newStart = newCandles[0].OpenTime;
-        var newEnd = newCandles[^1].OpenTime;
+        DateTime newStart = newCandles[0].OpenTime;
+        DateTime newEnd = newCandles[^1].OpenTime;
 
         // Keep candles before the new data range
         var preserved = existingCandles.Where(c => c.OpenTime < newStart).ToList();
@@ -338,7 +328,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         preserved.AddRange(newCandles);
 
         // Add candles after the new data range that weren't replaced
-        var afterNew = existingCandles.Where(c => c.OpenTime > newEnd);
+        IEnumerable<CandlestickV2> afterNew = existingCandles.Where(c => c.OpenTime > newEnd);
         preserved.AddRange(afterNew);
 
         // Sort and deduplicate
@@ -413,8 +403,8 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         LoadOptions options,
         CancellationToken ct)
     {
-        var availableTimeframes = _symbolIndex.GetAvailableTimeframes(symbol, options.Scope);
-        var requestedTimeframes = options.Timeframes ?? availableTimeframes.ToArray();
+        IReadOnlyList<CandlestickInterval> availableTimeframes = _symbolIndex.GetAvailableTimeframes(symbol, options.Scope);
+        CandlestickInterval[] requestedTimeframes = options.Timeframes ?? availableTimeframes.ToArray();
 
         if (requestedTimeframes.Length == 0)
         {
@@ -423,11 +413,11 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
 
         var symbolData = new SymbolDataV2 { Symbol = symbol };
 
-        foreach (var timeframe in requestedTimeframes)
+        foreach (CandlestickInterval timeframe in requestedTimeframes)
         {
             ct.ThrowIfCancellationRequested();
 
-            var candles = await LoadTimeframeDataAsync(
+            List<CandlestickV2> candles = await LoadTimeframeDataAsync(
                 symbol, timeframe, options, ct).ConfigureAwait(false);
 
             if (candles.Count > 0)
@@ -470,13 +460,13 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         LoadOptions options,
         CancellationToken ct)
     {
-        var startDate = options.StartDate ?? DateTime.MinValue;
-        var endDate = options.EndDate ?? DateTime.MaxValue;
+        DateTime startDate = options.StartDate ?? DateTime.MinValue;
+        DateTime endDate = options.EndDate ?? DateTime.MaxValue;
 
         // Adjust start date for warmup
         if (options.WarmupCandlesCount > 0 && timeframe != CandlestickInterval.Tick)
         {
-            var warmupDuration = timeframe.ToTimeSpan() * options.WarmupCandlesCount;
+            TimeSpan warmupDuration = timeframe.ToTimeSpan() * options.WarmupCandlesCount;
             startDate = startDate.Subtract(warmupDuration);
         }
 
@@ -493,13 +483,12 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         foreach (string file in files)
         {
             ct.ThrowIfCancellationRequested();
-            var fileCandles = await LoadFileDataAsync(file, ct).ConfigureAwait(false);
+            List<CandlestickV2> fileCandles = await LoadFileDataAsync(file, ct).ConfigureAwait(false);
             allCandles.AddRange(fileCandles);
         }
 
         // Filter to requested date range
-        var originalStart = options.StartDate ?? DateTime.MinValue;
-        var originalEnd = options.EndDate ?? DateTime.MaxValue;
+        DateTime originalEnd = options.EndDate ?? DateTime.MaxValue;
 
         var filtered = allCandles
             .Where(c => c.OpenTime >= startDate && c.OpenTime <= originalEnd)
@@ -523,8 +512,8 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
 
         if (isCompressed)
         {
-            var decompressed = await _compression.DecompressFromStreamAsync(fileStream, ct).ConfigureAwait(false);
-            var (candles, _) = _serializer.Deserialize(decompressed.AsSpan());
+            byte[] decompressed = await _compression.DecompressFromStreamAsync(fileStream, ct).ConfigureAwait(false);
+            (IReadOnlyList<CandlestickV2> candles, _) = _serializer.Deserialize(decompressed.AsSpan());
             return candles.ToList();
         }
         else
@@ -542,7 +531,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         CancellationToken ct)
     {
         // Find the smallest available timeframe that can be aggregated to target
-        var sourceTimeframe = availableTimeframes
+        CandlestickInterval sourceTimeframe = availableTimeframes
             .Where(tf => _aggregator.CanAggregate(tf, targetTimeframe))
             .OrderBy(tf => (int)tf)
             .FirstOrDefault();
@@ -555,7 +544,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         var sourceOptions = new LoadOptions
         {
             Symbol = options.Symbol,
-            Timeframes = new[] { sourceTimeframe },
+            Timeframes = [sourceTimeframe],
             StartDate = options.StartDate,
             EndDate = options.EndDate,
             WarmupCandlesCount = 0,
@@ -563,7 +552,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             AllowAggregation = false
         };
 
-        var sourceCandles = await LoadTimeframeDataAsync(
+        List<CandlestickV2> sourceCandles = await LoadTimeframeDataAsync(
             symbol, sourceTimeframe, sourceOptions, ct).ConfigureAwait(false);
 
         if (sourceCandles.Count == 0)
@@ -571,13 +560,13 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             return new List<CandlestickV2>();
         }
 
-        var aggregated = _aggregator.Aggregate(sourceCandles, sourceTimeframe, targetTimeframe);
+        IReadOnlyList<CandlestickV2> aggregated = _aggregator.Aggregate(sourceCandles, sourceTimeframe, targetTimeframe);
         return aggregated.ToList();
     }
 
     private CandlestickInterval[] DetermineTargetTimeframes(SaveOptions options, TimeframeV2 sourceData)
     {
-        if (options.TargetTimeframes != null && options.TargetTimeframes.Length > 0)
+        if (options.TargetTimeframes is { Length: > 0 })
         {
             if (options.AggregateFromSmallest)
             {
@@ -591,11 +580,11 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             return options.TargetTimeframes;
         }
 
-        if (_options.DefaultTimeframes != null && _options.DefaultTimeframes.Length > 0)
+        if (_options.DefaultTimeframes is { Length: > 0 })
         {
             return _options.DefaultTimeframes;
         }
 
-        return new[] { sourceData.Timeframe };
+        return [sourceData.Timeframe];
     }
 }

@@ -46,16 +46,16 @@ public sealed class TimeRangeIndex
         DateTime? earliest = null;
         DateTime? latest = null;
 
-        // Read first file header
-        var firstHeader = await ReadFileHeaderAsync(files[0], ct).ConfigureAwait(false);
-        if (firstHeader != null && firstHeader.Value.RecordCount > 0)
+        // Read the first file header
+        BinarySerializer.HeaderInfo? firstHeader = await ReadFileHeaderAsync(files[0], ct).ConfigureAwait(false);
+        if (firstHeader is { RecordCount: > 0 })
         {
             earliest = firstHeader.Value.FirstTimestamp;
         }
 
-        // Read last file header
-        var lastHeader = await ReadFileHeaderAsync(files[^1], ct).ConfigureAwait(false);
-        if (lastHeader != null && lastHeader.Value.RecordCount > 0)
+        // Read the last file header
+        BinarySerializer.HeaderInfo? lastHeader = await ReadFileHeaderAsync(files[^1], ct).ConfigureAwait(false);
+        if (lastHeader is { RecordCount: > 0 })
         {
             latest = lastHeader.Value.LastTimestamp;
         }
@@ -94,16 +94,20 @@ public sealed class TimeRangeIndex
         {
             ct.ThrowIfCancellationRequested();
 
-            var header = await ReadFileHeaderAsync(file, ct).ConfigureAwait(false);
+            BinarySerializer.HeaderInfo? header = await ReadFileHeaderAsync(file, ct).ConfigureAwait(false);
             if (header == null || header.Value.RecordCount == 0)
             {
                 continue;
             }
 
-            var fileStart = header.Value.FirstTimestamp;
-            var fileEnd = header.Value.LastTimestamp;
+            DateTime fileStart = header.Value.FirstTimestamp;
+            DateTime fileEnd = header.Value.LastTimestamp;
 
-            // Clamp to requested range
+            // Store original file range for candle estimation
+            DateTime originalFileStart = fileStart;
+            DateTime originalFileEnd = fileEnd;
+
+            // Clamp to the requested range
             if (fileStart < start)
             {
                 fileStart = start;
@@ -116,22 +120,36 @@ public sealed class TimeRangeIndex
             if (fileStart <= fileEnd)
             {
                 availableRanges.Add(new DateRange(fileStart, fileEnd));
-                totalCandlesAvailable += header.Value.RecordCount;
+
+                // Estimate candle count based on proportion of file within queried range
+                double originalDuration = (originalFileEnd - originalFileStart).TotalSeconds;
+                if (originalDuration > 0)
+                {
+                    double clampedDuration = (fileEnd - fileStart).TotalSeconds;
+                    double proportion = clampedDuration / originalDuration;
+                    int estimatedCandles = (int)Math.Ceiling(header.Value.RecordCount * proportion);
+                    totalCandlesAvailable += estimatedCandles;
+                }
+                else
+                {
+                    // Single-point range or edge case
+                    totalCandlesAvailable += header.Value.RecordCount;
+                }
             }
         }
 
         // Merge adjacent ranges
-        var mergedRanges = MergeAdjacentRanges(availableRanges);
+        List<DateRange> mergedRanges = MergeAdjacentRanges(availableRanges);
 
         // Calculate missing ranges
-        var missingRanges = CalculateMissingRanges(mergedRanges, start, end);
+        List<DateRange> missingRanges = CalculateMissingRanges(mergedRanges, start, end);
 
         // Calculate expected candle count
         int expectedCandlesCount = 0;
         if (timeframe != CandlestickInterval.Tick && timeframe != CandlestickInterval.Custom)
         {
-            var duration = end - start;
-            var intervalSeconds = (int)timeframe;
+            TimeSpan duration = end - start;
+            int intervalSeconds = (int)timeframe;
             expectedCandlesCount = (int)Math.Ceiling(duration.TotalSeconds / intervalSeconds);
         }
 
@@ -192,8 +210,8 @@ public sealed class TimeRangeIndex
                 // For compressed files, we need to decompress to read the header
                 // This is less efficient, but necessary
                 var compression = new CompressionHandler();
-                var decompressed = await compression.DecompressFromStreamAsync(fileStream, ct).ConfigureAwait(false);
-                var (_, header) = _serializer.Deserialize(decompressed.AsSpan());
+                byte[] decompressed = await compression.DecompressFromStreamAsync(fileStream, ct).ConfigureAwait(false);
+                (_, BinarySerializer.HeaderInfo header) = _serializer.Deserialize(decompressed.AsSpan());
                 return header;
             }
             else
@@ -206,8 +224,7 @@ public sealed class TimeRangeIndex
                     return null;
                 }
 
-                var (_, header) = _serializer.Deserialize(headerBuffer.AsSpan());
-                return header;
+                return _serializer.DeserializeHeaderOnly(headerBuffer.AsSpan());
             }
         }
         catch
@@ -225,7 +242,7 @@ public sealed class TimeRangeIndex
 
         var sorted = ranges.OrderBy(r => r.Start).ToList();
         var merged = new List<DateRange>();
-        var current = sorted[0];
+        DateRange current = sorted[0];
 
         for (int i = 1; i < sorted.Count; i++)
         {
@@ -248,12 +265,12 @@ public sealed class TimeRangeIndex
     {
         if (availableRanges.Count == 0)
         {
-            return new List<DateRange> { new DateRange(start, end) };
+            return [new DateRange(start, end)];
         }
 
         var missing = new List<DateRange>();
 
-        // Check gap at the beginning
+        // Check the gap at the beginning
         if (availableRanges[0].Start > start)
         {
             missing.Add(new DateRange(start, availableRanges[0].Start.AddTicks(-1)));
@@ -262,8 +279,8 @@ public sealed class TimeRangeIndex
         // Check gaps between ranges
         for (int i = 0; i < availableRanges.Count - 1; i++)
         {
-            var gapStart = availableRanges[i].End.AddTicks(1);
-            var gapEnd = availableRanges[i + 1].Start.AddTicks(-1);
+            DateTime gapStart = availableRanges[i].End.AddTicks(1);
+            DateTime gapEnd = availableRanges[i + 1].Start.AddTicks(-1);
 
             if (gapStart < gapEnd)
             {
@@ -271,7 +288,7 @@ public sealed class TimeRangeIndex
             }
         }
 
-        // Check gap at the end
+        // Check the gap at the end
         if (availableRanges[^1].End < end)
         {
             missing.Add(new DateRange(availableRanges[^1].End.AddTicks(1), end));

@@ -206,6 +206,24 @@ public sealed class BinarySerializer
         _pool.Return(buffer);
     }
 
+    /// <summary>
+    /// Deserializes only the header from a byte array without reading record data.
+    /// This is useful for quickly checking file metadata without loading all candlesticks.
+    /// </summary>
+    /// <param name="buffer">The buffer containing at least the header bytes.</param>
+    /// <returns>The header info.</returns>
+    public HeaderInfo DeserializeHeaderOnly(ReadOnlySpan<byte> buffer)
+    {
+        if (buffer.Length < HeaderSize)
+        {
+            throw new InvalidDataException($"Buffer too small for header. Expected at least {HeaderSize} bytes.");
+        }
+
+        var header = ReadHeader(buffer);
+        ValidateHeader(header);
+        return header;
+    }
+
     private (byte[] Buffer, int Length) SerializeEmptyData(CandlestickInterval timeframe, bool isCompressed)
     {
         byte[] buffer = _pool.Rent(HeaderSize);
