@@ -489,9 +489,13 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
 
         // Filter to requested date range
         DateTime originalEnd = options.EndDate ?? DateTime.MaxValue;
+        // Adjust end date to include the entire day if specified
+        DateTime effectiveEnd = options.EndDate.HasValue
+            ? originalEnd.Date.AddDays(1).AddTicks(-1)  // End of the specified day
+            : originalEnd;
 
         var filtered = allCandles
-            .Where(c => c.OpenTime >= startDate && c.OpenTime <= originalEnd)
+            .Where(c => c.OpenTime >= startDate && c.OpenTime <= effectiveEnd)
             .OrderBy(c => c.OpenTime)
             .ToList();
 
