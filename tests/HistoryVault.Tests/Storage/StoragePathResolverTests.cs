@@ -16,8 +16,7 @@ public class StoragePathResolverTests
         _testBasePath = Path.Combine(Path.GetTempPath(), "HVTest", Guid.NewGuid().ToString());
         _resolver = new StoragePathResolver(new HistoryVaultOptions
         {
-            LocalBasePath = _testBasePath,
-            GlobalBasePath = Path.Combine(_testBasePath, "global")
+            BasePathOverride = _testBasePath
         });
     }
 
@@ -29,10 +28,11 @@ public class StoragePathResolverTests
     }
 
     [Fact]
-    public void GetStoragePath_Global_ReturnsGlobalPath()
+    public void GetStoragePath_Global_ReturnsOverridePath()
     {
+        // With BasePathOverride, both scopes use the same base path
         var path = _resolver.GetStoragePath(StorageScope.Global);
-        path.Should().Be(Path.Combine(_testBasePath, "global"));
+        path.Should().Be(_testBasePath);
     }
 
     [Fact]

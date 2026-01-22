@@ -15,7 +15,7 @@ public class SymbolIndexTests : IDisposable
     public SymbolIndexTests()
     {
         _tempPath = TestHelpers.GetTempDirectory();
-        var pathResolver = new StoragePathResolver(new HistoryVaultOptions { LocalBasePath = _tempPath });
+        var pathResolver = new StoragePathResolver(new HistoryVaultOptions { BasePathOverride = _tempPath });
         _index = new SymbolIndex(pathResolver);
     }
 

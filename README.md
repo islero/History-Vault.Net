@@ -36,12 +36,10 @@ using HistoryVault.Configuration;
 using HistoryVault.Models;
 using HistoryVault.Storage;
 
-// Configure the vault
+// Configure the vault (paths are auto-detected based on OS and scope)
 var options = new HistoryVaultOptions
 {
-    LocalBasePath = "/path/to/data",
-    DefaultScope = StorageScope.Local,
-    DefaultCompression = true
+    DefaultScope = StorageScope.Local  // Data stored in ./data/history-vault/
 };
 
 await using var vault = new HistoryVaultStorage(options);
@@ -164,10 +162,15 @@ var data = await vault.LoadAsync(loadOptions);
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `LocalBasePath` | string | Platform-specific | Local storage directory |
-| `GlobalBasePath` | string | Platform-specific | Global shared storage directory |
 | `DefaultScope` | StorageScope | Local | Default storage scope |
-| `DefaultCompression` | bool | true | Default compression setting |
+| `BasePathOverride` | string? | null | Override automatic path resolution (for testing) |
+
+**Automatic Path Resolution:**
+- **Local scope**: `./data/history-vault/` (relative to current working directory)
+- **Global scope**: OS temp directory + `/HistoryVault`
+  - Windows: `C:\Users\<user>\AppData\Local\Temp\HistoryVault`
+  - macOS: `/var/folders/.../T/HistoryVault`
+  - Linux: `/tmp/HistoryVault`
 
 #### SaveOptions
 

@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using HistoryVault.Configuration;
 using HistoryVault.Extensions;
 using HistoryVault.Models;
@@ -10,7 +9,7 @@ namespace HistoryVault.Storage;
 /// </summary>
 public sealed class StoragePathResolver
 {
-    private readonly HistoryVaultOptions _options;
+    private readonly string? _basePathOverride;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StoragePathResolver"/> class.
@@ -18,7 +17,8 @@ public sealed class StoragePathResolver
     /// <param name="options">The configuration options.</param>
     public StoragePathResolver(HistoryVaultOptions options)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
+        _basePathOverride = options.BasePathOverride;
     }
 
     /// <summary>
@@ -28,18 +28,23 @@ public sealed class StoragePathResolver
     /// <returns>The base storage path.</returns>
     public string GetStoragePath(StorageScope scope)
     {
-        if (scope == StorageScope.Local)
+        // If override is set, use it for all scopes (primarily for testing)
+        if (!string.IsNullOrEmpty(_basePathOverride))
         {
-            return _options.LocalBasePath
-                ?? Path.Combine(Directory.GetCurrentDirectory(), "data", "history-vault");
+            return _basePathOverride;
         }
 
-        if (!string.IsNullOrEmpty(_options.GlobalBasePath))
-        {
-            return _options.GlobalBasePath;
-        }
+        return scope == StorageScope.Local
+            ? GetLocalStoragePath()
+            : GetGlobalStoragePath();
+    }
 
-        return GetGlobalStoragePath();
+    /// <summary>
+    /// Gets the local storage path (inside the project directory).
+    /// </summary>
+    private static string GetLocalStoragePath()
+    {
+        return Path.Combine(Directory.GetCurrentDirectory(), "data", "history-vault");
     }
 
     /// <summary>
@@ -267,26 +272,16 @@ public sealed class StoragePathResolver
         return (year, month);
     }
 
+    /// <summary>
+    /// Gets the global storage path (OS-specific temp directory).
+    /// </summary>
     private static string GetGlobalStoragePath()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "HistoryVault");
-        }
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Library", "Application Support", "HistoryVault");
-        }
-
-        // Linux and others
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".local", "share", "HistoryVault");
+        // Use OS-specific temp directory
+        // Windows: C:\Users\<user>\AppData\Local\Temp\HistoryVault
+        // macOS: /var/folders/.../T/HistoryVault or /tmp/HistoryVault
+        // Linux: /tmp/HistoryVault
+        return Path.Combine(Path.GetTempPath(), "HistoryVault");
     }
 
     private static string SanitizeFileName(string name)

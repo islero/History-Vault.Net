@@ -14,16 +14,14 @@ public sealed class HistoryVaultOptions
     public StorageScope DefaultScope { get; set; } = StorageScope.Local;
 
     /// <summary>
-    /// Gets or sets the custom base path for local storage.
-    /// If null, uses the default path (./data/history-vault/).
+    /// Gets or sets a custom base path that overrides the automatic path resolution.
+    /// When set, this path is used as the base for both Local and Global scopes.
+    /// Primarily intended for testing scenarios.
+    /// If null (default), paths are automatically resolved based on <see cref="StorageScope"/>:
+    /// - Local: ./data/history-vault/ (relative to current working directory)
+    /// - Global: OS temp directory/HistoryVault (e.g., /tmp/HistoryVault on Unix)
     /// </summary>
-    public string? LocalBasePath { get; set; }
-
-    /// <summary>
-    /// Gets or sets the custom base path for global storage.
-    /// If null, uses the OS-specific default path.
-    /// </summary>
-    public string? GlobalBasePath { get; set; }
+    public string? BasePathOverride { get; set; }
 
     /// <summary>
     /// Gets or sets the maximum degree of parallelism for I/O operations.

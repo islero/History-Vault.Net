@@ -1,5 +1,4 @@
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 using HistoryVault.Aggregation;
 using HistoryVault.Configuration;
 using HistoryVault.Models;
@@ -8,7 +7,7 @@ using HistoryVault.Storage;
 namespace HistoryVault.Benchmarks;
 
 [MemoryDiagnoser]
-[SimpleJob(RuntimeMoniker.Net90)]
+[SimpleJob]
 public class VaultBenchmarks
 {
     private string _tempPath = null!;
@@ -29,7 +28,7 @@ public class VaultBenchmarks
 
         _vault = new HistoryVaultStorage(new HistoryVaultOptions
         {
-            LocalBasePath = _tempPath,
+            BasePathOverride = _tempPath,
             DefaultScope = StorageScope.Local
         });
 

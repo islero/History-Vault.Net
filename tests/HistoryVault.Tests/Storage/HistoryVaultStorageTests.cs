@@ -17,8 +17,7 @@ public class HistoryVaultStorageTests : IDisposable
         _tempPath = TestHelpers.GetTempDirectory();
         _options = new HistoryVaultOptions
         {
-            LocalBasePath = _tempPath,
-            GlobalBasePath = Path.Combine(_tempPath, "global"),
+            BasePathOverride = _tempPath,
             DefaultScope = StorageScope.Local
         };
         _vault = new HistoryVaultStorage(_options);
