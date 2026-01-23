@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-01-01
+## [1.0.0] - 2025-01-23
 
 ### Added
 
 - Initial release of HistoryVault.Net
+- NuGet package publishing
+- GitHub Actions CI/CD workflows
+  - Multi-platform testing (Windows, macOS, Linux)
+  - Multi-version testing (.NET 9.0, .NET 10.0)
+  - Automated NuGet publishing on release
 - High-performance binary serialization with HPC optimizations
   - Span<byte> and ArrayPool<byte> for zero-allocation patterns
   - 64-byte header with metadata and checksums
@@ -40,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Thread-safe operations
   - SemaphoreSlim for concurrent access
   - Safe parallel read/write operations
-- Comprehensive unit test suite (112 tests)
+- Comprehensive unit test suite (152+ tests)
 - BenchmarkDotNet performance benchmarks
 
 ### Core Interfaces
@@ -69,7 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- NuGet package publishing
 - Performance optimizations for large datasets
 - Memory-mapped file support
 - Async streaming for large loads

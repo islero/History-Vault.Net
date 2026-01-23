@@ -3,14 +3,20 @@
   <PropertyGroup>
     <PackageId>HistoryVault</PackageId>
     <Version>1.0.0</Version>
+    <Authors>HistoryVault Contributors</Authors>
+    <Copyright>Copyright (c) 2025 HistoryVault.Net Contributors</Copyright>
     <Description>Ultra-fast market data storage for .NET HFT backtesting systems with compression, aggregation, and cross-platform support.</Description>
     <PackageTags>hft;trading;market-data;hpc;backtest;quantitative;finance;candlestick;ohlcv;history-vault</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/islero/HistoryVault.Net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/islero/HistoryVault.Net.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <AssemblyVersion>1.0.0</AssemblyVersion>
     <FileVersion>1.0.0</FileVersion>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageReleaseNotes>Initial release with high-performance binary serialization, GZip compression, timeframe aggregation, and cross-platform support.</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -25,7 +31,6 @@
 
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
-    <None Include="../../icon.png" Pack="true" PackagePath="/" Condition="Exists('../../icon.png')" />
   </ItemGroup>
 
 </Project>

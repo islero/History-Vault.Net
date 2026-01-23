@@ -1,5 +1,10 @@
 # HistoryVault.Net
 
+[![CI](https://github.com/islero/HistoryVault.Net/actions/workflows/ci.yml/badge.svg)](https://github.com/islero/HistoryVault.Net/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/HistoryVault.svg)](https://www.nuget.org/packages/HistoryVault/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/HistoryVault.svg)](https://www.nuget.org/packages/HistoryVault/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A high-performance market data storage library for .NET HFT/HPC systems. Store, load, and aggregate OHLCV candlestick data with optimal memory efficiency and minimal allocations.
 
 ## Features
