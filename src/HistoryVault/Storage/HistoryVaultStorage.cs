@@ -497,7 +497,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             startDate = startDate.Subtract(warmupDuration);
         }
 
-        // Adjust end date to include the entire day if specified
+        // Adjust the end date to include the entire day if specified
         DateTime effectiveEnd = options.EndDate.HasValue
             ? originalEnd.Date.AddDays(1).AddTicks(-1)
             : originalEnd;
@@ -520,7 +520,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             allCandles.AddRange(fileCandles);
         }
 
-        // Filter to requested date range (using warmup-adjusted startDate and effectiveEnd)
+        // Filter to the requested date range (using warmup-adjusted startDate and effectiveEnd)
         var filtered = allCandles
             .Where(c => c.OpenTime >= startDate && c.OpenTime <= effectiveEnd)
             .OrderBy(c => c.OpenTime)
