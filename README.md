@@ -302,6 +302,63 @@ Valid aggregation paths:
 
 HistoryVaultStorage is thread-safe for concurrent read/write operations. Internal locking ensures data consistency when multiple threads access the same symbol/timeframe.
 
+## Integration with High-Performance-Backtest.Net
+
+This library works seamlessly with [High-Performance-Backtest.Net](https://github.com/islero/High-Performance-Backtest.Net) - a high-performance backtesting engine. Both libraries use identical data structures (`SymbolDataV2`, `TimeframeV2`, `CandlestickV2`) but with different namespaces:
+
+- **HistoryVault.Net**: `HistoryVault.Models`
+- **High-Performance-Backtest.Net**: `Backtest.Net.SymbolsData`
+
+### Converting Between Types
+
+The easiest way to convert between these types is using JSON serialization:
+
+```csharp
+using System.Text.Json;
+using HistoryVault.Models;
+
+// Load data from HistoryVault
+var vault = new HistoryVaultStorage(options);
+var historyVaultData = await vault.LoadAsync(loadOptions);
+
+// Convert HistoryVault.Models.SymbolDataV2 -> Backtest.Net.SymbolsData.SymbolDataV2
+var json = JsonSerializer.Serialize(historyVaultData);
+var backtestData = JsonSerializer.Deserialize<Backtest.Net.SymbolsData.SymbolDataV2>(json);
+
+// Now use backtestData with High-Performance-Backtest.Net
+var backtester = new Backtester();
+backtester.Run(backtestData);
+```
+
+For better performance with large datasets, consider creating an extension method:
+
+```csharp
+public static class SymbolDataConverter
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    public static Backtest.Net.SymbolsData.SymbolDataV2 ToBacktestFormat(
+        this HistoryVault.Models.SymbolDataV2 source)
+    {
+        var json = JsonSerializer.Serialize(source, JsonOptions);
+        return JsonSerializer.Deserialize<Backtest.Net.SymbolsData.SymbolDataV2>(json, JsonOptions)!;
+    }
+
+    public static HistoryVault.Models.SymbolDataV2 ToHistoryVaultFormat(
+        this Backtest.Net.SymbolsData.SymbolDataV2 source)
+    {
+        var json = JsonSerializer.Serialize(source, JsonOptions);
+        return JsonSerializer.Deserialize<HistoryVault.Models.SymbolDataV2>(json, JsonOptions)!;
+    }
+}
+
+// Usage
+var backtestData = historyVaultData.ToBacktestFormat();
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
