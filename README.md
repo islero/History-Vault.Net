@@ -118,7 +118,7 @@ var report = await vault.CheckAvailabilityAsync(
 );
 
 Console.WriteLine($"Coverage: {report.CoveragePercentage:P2}");
-Console.WriteLine($"Available: {report.AvailableCount} / {report.ExpectedCount} candles");
+Console.WriteLine($"Available: {report.TotalCandlesAvailable} / {report.ExpectedCandlesCount} candles");
 
 foreach (var gap in report.Gaps)
 {
