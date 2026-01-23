@@ -318,25 +318,49 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             return newCandles;
         }
 
-        DateTime newStart = newCandles[0].OpenTime;
-        DateTime newEnd = newCandles[^1].OpenTime;
+        var result = new List<CandlestickV2>(existingCandles.Count + newCandles.Count);
+        int i = 0; // index for existing candles
+        int j = 0; // index for new candles
 
-        // Keep candles before the new data range
-        var preserved = existingCandles.Where(c => c.OpenTime < newStart).ToList();
+        // Since both lists are sorted by OpenTime, we can perform a linear merge
+        while (i < existingCandles.Count && j < newCandles.Count)
+        {
+            CandlestickV2 existing = existingCandles[i];
+            CandlestickV2 update = newCandles[j];
 
-        // Add new candles (they replace any overlap)
-        preserved.AddRange(newCandles);
+            if (existing.OpenTime < update.OpenTime)
+            {
+                result.Add(existing);
+                i++;
+            }
+            else if (existing.OpenTime > update.OpenTime)
+            {
+                result.Add(update);
+                j++;
+            }
+            else // timestamps are equal, new data overwrites existing
+            {
+                result.Add(update);
+                i++;
+                j++;
+            }
+        }
 
-        // Add candles after the new data range that weren't replaced
-        IEnumerable<CandlestickV2> afterNew = existingCandles.Where(c => c.OpenTime > newEnd);
-        preserved.AddRange(afterNew);
+        // Add remaining existing candles
+        while (i < existingCandles.Count)
+        {
+            result.Add(existingCandles[i]);
+            i++;
+        }
 
-        // Sort and deduplicate
-        return preserved
-            .OrderBy(c => c.OpenTime)
-            .GroupBy(c => c.OpenTime)
-            .Select(g => g.Last())
-            .ToList();
+        // Add remaining new candles
+        while (j < newCandles.Count)
+        {
+            result.Add(newCandles[j]);
+            j++;
+        }
+
+        return result;
     }
 
     private async Task WriteMonthDataAsync(
@@ -460,8 +484,11 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
         LoadOptions options,
         CancellationToken ct)
     {
-        DateTime startDate = options.StartDate ?? DateTime.MinValue;
-        DateTime endDate = options.EndDate ?? DateTime.MaxValue;
+        // Calculate effective dates first
+        DateTime originalStart = options.StartDate ?? DateTime.MinValue;
+        DateTime originalEnd = options.EndDate ?? DateTime.MaxValue;
+
+        DateTime startDate = originalStart;
 
         // Adjust start date for warmup
         if (options.WarmupCandlesCount > 0 && timeframe != CandlestickInterval.Tick)
@@ -470,8 +497,14 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             startDate = startDate.Subtract(warmupDuration);
         }
 
+        // Adjust end date to include the entire day if specified
+        DateTime effectiveEnd = options.EndDate.HasValue
+            ? originalEnd.Date.AddDays(1).AddTicks(-1)
+            : originalEnd;
+
+        // Use effectiveEnd when fetching files
         var files = _pathResolver.GetDataFilesInRange(
-            options.Scope, symbol, timeframe, startDate, endDate).ToList();
+            options.Scope, symbol, timeframe, startDate, effectiveEnd).ToList();
 
         if (files.Count == 0)
         {
@@ -487,13 +520,7 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             allCandles.AddRange(fileCandles);
         }
 
-        // Filter to requested date range
-        DateTime originalEnd = options.EndDate ?? DateTime.MaxValue;
-        // Adjust end date to include the entire day if specified
-        DateTime effectiveEnd = options.EndDate.HasValue
-            ? originalEnd.Date.AddDays(1).AddTicks(-1)  // End of the specified day
-            : originalEnd;
-
+        // Filter to requested date range (using warmup-adjusted startDate and effectiveEnd)
         var filtered = allCandles
             .Where(c => c.OpenTime >= startDate && c.OpenTime <= effectiveEnd)
             .OrderBy(c => c.OpenTime)
@@ -545,13 +572,16 @@ public sealed class HistoryVaultStorage : IHistoryVault, IDataAvailabilityChecke
             return new List<CandlestickV2>();
         }
 
+        int aggregationFactor = sourceTimeframe.GetAggregationFactor(targetTimeframe);
+        int sourceWarmup = options.WarmupCandlesCount * aggregationFactor;
+
         var sourceOptions = new LoadOptions
         {
             Symbol = options.Symbol,
             Timeframes = [sourceTimeframe],
             StartDate = options.StartDate,
             EndDate = options.EndDate,
-            WarmupCandlesCount = 0,
+            WarmupCandlesCount = sourceWarmup,
             Scope = options.Scope,
             AllowAggregation = false
         };
