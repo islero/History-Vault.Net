@@ -79,4 +79,40 @@ public readonly record struct DateRange(DateTime Start, DateTime End)
         return (gapEndToStart >= 0 && gapEndToStart <= 1)
             || (gapStartToEnd >= 0 && gapStartToEnd <= 1);
     }
+
+    /// <summary>
+    /// Determines whether this range is adjacent to another range within a specified tolerance.
+    /// </summary>
+    /// <param name="other">The other range to check.</param>
+    /// <param name="tolerance">The maximum gap allowed to still be considered adjacent.</param>
+    /// <returns>True if the ranges are adjacent within the tolerance; otherwise, false.</returns>
+    public bool IsAdjacentTo(DateRange other, TimeSpan tolerance)
+    {
+        long toleranceTicks = tolerance.Ticks;
+        long gapEndToStart = (other.Start - End).Ticks;
+        long gapStartToEnd = (Start - other.End).Ticks;
+
+        return (gapEndToStart >= 0 && gapEndToStart <= toleranceTicks)
+            || (gapStartToEnd >= 0 && gapStartToEnd <= toleranceTicks);
+    }
+
+    /// <summary>
+    /// Merges this range with another range using a specified tolerance for adjacency.
+    /// </summary>
+    /// <param name="other">The other range to merge with.</param>
+    /// <param name="tolerance">The tolerance for considering ranges as adjacent.</param>
+    /// <returns>The merged range.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when ranges cannot be merged.</exception>
+    public DateRange Merge(DateRange other, TimeSpan tolerance)
+    {
+        if (!Overlaps(other) && !IsAdjacentTo(other, tolerance))
+        {
+            throw new InvalidOperationException("Cannot merge non-overlapping and non-adjacent ranges.");
+        }
+
+        return new DateRange(
+            Start < other.Start ? Start : other.Start,
+            End > other.End ? End : other.End
+        );
+    }
 }

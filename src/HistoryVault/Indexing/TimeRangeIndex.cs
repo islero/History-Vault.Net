@@ -121,28 +121,39 @@ public sealed class TimeRangeIndex
             {
                 availableRanges.Add(new DateRange(fileStart, fileEnd));
 
-                // Estimate candle count based on proportion of file within queried range
-                double originalDuration = (originalFileEnd - originalFileStart).TotalSeconds;
-                if (originalDuration > 0)
+                // Calculate candle count based on timeframe
+                if (timeframe != CandlestickInterval.Tick && timeframe != CandlestickInterval.Custom)
                 {
                     double clampedDuration = (fileEnd - fileStart).TotalSeconds;
-                    double proportion = clampedDuration / originalDuration;
-                    int estimatedCandles = (int)Math.Ceiling(header.Value.RecordCount * proportion);
+                    int intervalSeconds = (int)timeframe;
+                    int estimatedCandles = (int)Math.Ceiling(clampedDuration / intervalSeconds);
                     totalCandlesAvailable += estimatedCandles;
                 }
                 else
                 {
-                    // Single-point range or edge case
-                    totalCandlesAvailable += header.Value.RecordCount;
+                    // For Tick/Custom, use proportional estimation
+                    double originalDuration = (originalFileEnd - originalFileStart).TotalSeconds;
+                    if (originalDuration > 0)
+                    {
+                        double clampedDuration = (fileEnd - fileStart).TotalSeconds;
+                        double proportion = clampedDuration / originalDuration;
+                        int estimatedCandles = (int)Math.Ceiling(header.Value.RecordCount * proportion);
+                        totalCandlesAvailable += estimatedCandles;
+                    }
+                    else
+                    {
+                        // Single-point range or edge case
+                        totalCandlesAvailable += header.Value.RecordCount;
+                    }
                 }
             }
         }
 
-        // Merge adjacent ranges
-        List<DateRange> mergedRanges = MergeAdjacentRanges(availableRanges);
+        // Merge adjacent ranges (using timeframe-based tolerance)
+        List<DateRange> mergedRanges = MergeAdjacentRanges(availableRanges, timeframe);
 
-        // Calculate missing ranges
-        List<DateRange> missingRanges = CalculateMissingRanges(mergedRanges, start, end);
+        // Calculate missing ranges (only report gaps larger than timeframe duration)
+        List<DateRange> missingRanges = CalculateMissingRanges(mergedRanges, start, end, timeframe);
 
         // Calculate expected candle count
         int expectedCandlesCount = 0;
@@ -191,6 +202,24 @@ public sealed class TimeRangeIndex
             .ToList();
     }
 
+    private static TimeSpan GetMergeTolerance(CandlestickInterval timeframe)
+    {
+        if (timeframe == CandlestickInterval.Tick || timeframe == CandlestickInterval.Custom)
+        {
+            return TimeSpan.FromTicks(1);
+        }
+        return TimeSpan.FromSeconds((int)timeframe);
+    }
+
+    private static long GetMinimumGapTicks(CandlestickInterval timeframe)
+    {
+        if (timeframe == CandlestickInterval.Tick || timeframe == CandlestickInterval.Custom)
+        {
+            return 1;
+        }
+        return TimeSpan.FromSeconds((int)timeframe).Ticks;
+    }
+
     private async Task<BinarySerializer.HeaderInfo?> ReadFileHeaderAsync(string filePath, CancellationToken ct)
     {
         try
@@ -233,22 +262,23 @@ public sealed class TimeRangeIndex
         }
     }
 
-    private static List<DateRange> MergeAdjacentRanges(List<DateRange> ranges)
+    private static List<DateRange> MergeAdjacentRanges(List<DateRange> ranges, CandlestickInterval timeframe)
     {
         if (ranges.Count <= 1)
         {
             return ranges;
         }
 
+        TimeSpan tolerance = GetMergeTolerance(timeframe);
         var sorted = ranges.OrderBy(r => r.Start).ToList();
         var merged = new List<DateRange>();
         DateRange current = sorted[0];
 
         for (int i = 1; i < sorted.Count; i++)
         {
-            if (current.Overlaps(sorted[i]) || current.IsAdjacentTo(sorted[i]))
+            if (current.Overlaps(sorted[i]) || current.IsAdjacentTo(sorted[i], tolerance))
             {
-                current = current.Merge(sorted[i]);
+                current = current.Merge(sorted[i], tolerance);
             }
             else
             {
@@ -261,17 +291,23 @@ public sealed class TimeRangeIndex
         return merged;
     }
 
-    private static List<DateRange> CalculateMissingRanges(List<DateRange> availableRanges, DateTime start, DateTime end)
+    private static List<DateRange> CalculateMissingRanges(
+        List<DateRange> availableRanges,
+        DateTime start,
+        DateTime end,
+        CandlestickInterval timeframe)
     {
         if (availableRanges.Count == 0)
         {
             return [new DateRange(start, end)];
         }
 
+        long minimumGapTicks = GetMinimumGapTicks(timeframe);
         var missing = new List<DateRange>();
 
         // Check the gap at the beginning
-        if (availableRanges[0].Start > start)
+        long startGapTicks = (availableRanges[0].Start - start).Ticks;
+        if (startGapTicks > minimumGapTicks)
         {
             missing.Add(new DateRange(start, availableRanges[0].Start.AddTicks(-1)));
         }
@@ -279,9 +315,9 @@ public sealed class TimeRangeIndex
         // Check gaps between ranges
         for (int i = 0; i < availableRanges.Count - 1; i++)
         {
-            // Only report gaps larger than 1 tick (1 tick is expected candle boundary)
+            // Only report gaps larger than the timeframe duration
             long gapTicks = (availableRanges[i + 1].Start - availableRanges[i].End).Ticks;
-            if (gapTicks > 1)
+            if (gapTicks > minimumGapTicks)
             {
                 DateTime gapStart = availableRanges[i].End.AddTicks(1);
                 DateTime gapEnd = availableRanges[i + 1].Start.AddTicks(-1);
@@ -290,7 +326,8 @@ public sealed class TimeRangeIndex
         }
 
         // Check the gap at the end
-        if (availableRanges[^1].End < end)
+        long endGapTicks = (end - availableRanges[^1].End).Ticks;
+        if (endGapTicks > minimumGapTicks)
         {
             missing.Add(new DateRange(availableRanges[^1].End.AddTicks(1), end));
         }
