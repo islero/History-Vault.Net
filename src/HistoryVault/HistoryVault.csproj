@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>HistoryVault</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>HistoryVault Contributors</Authors>
     <Copyright>Copyright (c) 2025 HistoryVault.Net Contributors</Copyright>
     <Description>Ultra-fast market data storage for .NET HFT backtesting systems with compression, aggregation, and cross-platform support.</Description>
@@ -13,10 +13,10 @@
     <PackageProjectUrl>https://github.com/islero/HistoryVault.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/islero/HistoryVault.Net.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
-    <FileVersion>1.0.0</FileVersion>
+    <AssemblyVersion>1.0.1</AssemblyVersion>
+    <FileVersion>1.0.1</FileVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageReleaseNotes>Initial release with high-performance binary serialization, GZip compression, timeframe aggregation, and cross-platform support.</PackageReleaseNotes>
+    <PackageReleaseNotes>Refine gap detection in `TimeRangeIndex` to only report gaps larger than 1 tick and update `DateRange.IsAdjacentTo` logic to handle 1-tick tolerance for candle boundaries.</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
