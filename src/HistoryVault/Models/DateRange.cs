@@ -64,9 +64,19 @@ public readonly record struct DateRange(DateTime Start, DateTime End)
     }
 
     /// <summary>
-    /// Determines whether this range is adjacent to another range (end of one equals start of other).
+    /// Determines whether this range is adjacent to another range.
+    /// Ranges are considered adjacent if the gap between them is at most 1 tick,
+    /// which handles the standard candle boundary where CloseTime = OpenTime + Duration - 1 tick.
     /// </summary>
     /// <param name="other">The other range to check.</param>
     /// <returns>True if the ranges are adjacent; otherwise, false.</returns>
-    public bool IsAdjacentTo(DateRange other) => End == other.Start || Start == other.End;
+    public bool IsAdjacentTo(DateRange other)
+    {
+        // Allow 1-tick tolerance for candle boundaries
+        long gapEndToStart = (other.Start - End).Ticks;
+        long gapStartToEnd = (Start - other.End).Ticks;
+
+        return (gapEndToStart >= 0 && gapEndToStart <= 1)
+            || (gapStartToEnd >= 0 && gapStartToEnd <= 1);
+    }
 }

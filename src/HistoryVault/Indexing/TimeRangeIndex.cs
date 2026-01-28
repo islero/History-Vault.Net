@@ -279,11 +279,12 @@ public sealed class TimeRangeIndex
         // Check gaps between ranges
         for (int i = 0; i < availableRanges.Count - 1; i++)
         {
-            DateTime gapStart = availableRanges[i].End.AddTicks(1);
-            DateTime gapEnd = availableRanges[i + 1].Start.AddTicks(-1);
-
-            if (gapStart < gapEnd)
+            // Only report gaps larger than 1 tick (1 tick is expected candle boundary)
+            long gapTicks = (availableRanges[i + 1].Start - availableRanges[i].End).Ticks;
+            if (gapTicks > 1)
             {
+                DateTime gapStart = availableRanges[i].End.AddTicks(1);
+                DateTime gapEnd = availableRanges[i + 1].Start.AddTicks(-1);
                 missing.Add(new DateRange(gapStart, gapEnd));
             }
         }
