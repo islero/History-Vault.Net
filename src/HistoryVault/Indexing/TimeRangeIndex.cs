@@ -46,18 +46,24 @@ public sealed class TimeRangeIndex
         DateTime? earliest = null;
         DateTime? latest = null;
 
-        // Read the first file header
-        BinarySerializer.HeaderInfo? firstHeader = await ReadFileHeaderAsync(files[0], ct).ConfigureAwait(false);
-        if (firstHeader is { RecordCount: > 0 })
+        foreach (string file in files)
         {
-            earliest = firstHeader.Value.FirstTimestamp;
+            BinarySerializer.HeaderInfo? header = await ReadFileHeaderAsync(file, ct).ConfigureAwait(false);
+            if (header is { RecordCount: > 0 })
+            {
+                earliest = header.Value.FirstTimestamp;
+                break;
+            }
         }
 
-        // Read the last file header
-        BinarySerializer.HeaderInfo? lastHeader = await ReadFileHeaderAsync(files[^1], ct).ConfigureAwait(false);
-        if (lastHeader is { RecordCount: > 0 })
+        for (int i = files.Count - 1; i >= 0; i--)
         {
-            latest = lastHeader.Value.LastTimestamp;
+            BinarySerializer.HeaderInfo? header = await ReadFileHeaderAsync(files[i], ct).ConfigureAwait(false);
+            if (header is { RecordCount: > 0 })
+            {
+                latest = header.Value.LastTimestamp;
+                break;
+            }
         }
 
         if (earliest.HasValue && latest.HasValue)

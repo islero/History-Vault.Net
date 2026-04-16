@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using HistoryVault.Configuration;
 using HistoryVault.Extensions;
 using HistoryVault.Models;
@@ -9,6 +11,10 @@ namespace HistoryVault.Storage;
 /// </summary>
 public sealed class StoragePathResolver
 {
+    private const string EncodedSymbolPrefix = "s_";
+    private const string SymbolMetadataFileName = ".symbol";
+    private const string LegacyMonthlyTimeframeCode = "1M";
+
     private readonly string? _basePathOverride;
 
     /// <summary>
@@ -53,8 +59,18 @@ public sealed class StoragePathResolver
     public string GetSymbolPath(StorageScope scope, string symbol)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
-        string sanitizedSymbol = SanitizeFileName(symbol);
-        return Path.Combine(GetStoragePath(scope), sanitizedSymbol);
+        string basePath = GetStoragePath(scope);
+        string encodedSymbol = EncodeSymbolPathSegment(symbol);
+        string preferredPath = Path.Combine(basePath, encodedSymbol);
+
+        if (Directory.Exists(preferredPath))
+        {
+            return preferredPath;
+        }
+
+        string legacySymbol = SanitizeFileNameLegacy(symbol);
+        string legacyPath = Path.Combine(basePath, legacySymbol);
+        return Directory.Exists(legacyPath) ? legacyPath : preferredPath;
     }
 
     /// <summary>
@@ -64,7 +80,27 @@ public sealed class StoragePathResolver
     /// <param name="symbol">The symbol name.</param>
     /// <param name="timeframe">The timeframe.</param>
     /// <returns>The timeframe directory path.</returns>
-    public string GetTimeframePath(StorageScope scope, string symbol, CandlestickInterval timeframe) => Path.Combine(GetSymbolPath(scope, symbol), timeframe.ToShortCode());
+    public string GetTimeframePath(StorageScope scope, string symbol, CandlestickInterval timeframe)
+    {
+        string symbolPath = GetSymbolPath(scope, symbol);
+        string preferredPath = Path.Combine(symbolPath, timeframe.ToShortCode());
+
+        if (Directory.Exists(preferredPath))
+        {
+            return preferredPath;
+        }
+
+        if (timeframe == CandlestickInterval.MN1)
+        {
+            string? legacyMonthlyPath = FindExactTimeframeDirectory(symbolPath, LegacyMonthlyTimeframeCode);
+            if (legacyMonthlyPath != null)
+            {
+                return legacyMonthlyPath;
+            }
+        }
+
+        return preferredPath;
+    }
 
     /// <summary>
     /// Gets the directory path for a year within a symbol/timeframe.
@@ -198,7 +234,7 @@ public sealed class StoragePathResolver
 
         foreach (string dir in Directory.GetDirectories(basePath))
         {
-            yield return Path.GetFileName(dir);
+            yield return ReadSymbolName(dir);
         }
     }
 
@@ -241,6 +277,20 @@ public sealed class StoragePathResolver
     }
 
     /// <summary>
+    /// Persists the original symbol name alongside the symbol directory.
+    /// </summary>
+    /// <param name="scope">The storage scope.</param>
+    /// <param name="symbol">The original symbol name.</param>
+    public void WriteSymbolMetadata(StorageScope scope, string symbol)
+    {
+        string symbolPath = GetSymbolPath(scope, symbol);
+        Directory.CreateDirectory(symbolPath);
+
+        string metadataPath = Path.Combine(symbolPath, SymbolMetadataFileName);
+        File.WriteAllText(metadataPath, symbol, Encoding.UTF8);
+    }
+
+    /// <summary>
     /// Extracts the year and month from a data file path.
     /// </summary>
     /// <param name="filePath">The file path.</param>
@@ -264,18 +314,72 @@ public sealed class StoragePathResolver
     }
 
     /// <summary>
-    /// Gets the global storage path (OS-specific temp directory).
+    /// Gets the global storage path (OS-specific application data directory).
     /// </summary>
     private static string GetGlobalStoragePath()
     {
-        // Use OS-specific temp directory
-        // Windows: C:\Users\<user>\AppData\Local\Temp\HistoryVault
-        // macOS: /var/folders/.../T/HistoryVault or /tmp/HistoryVault
-        // Linux: /tmp/HistoryVault
-        return Path.Combine(Path.GetTempPath(), "HistoryVault");
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(home, "Library", "Application Support", "HistoryVault");
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return Path.Combine(localAppData, "HistoryVault");
+        }
+
+        string? xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        if (!string.IsNullOrWhiteSpace(xdgDataHome))
+        {
+            return Path.Combine(xdgDataHome, "HistoryVault");
+        }
+
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(userHome, ".local", "share", "HistoryVault");
     }
 
-    private static string SanitizeFileName(string name)
+    private static string EncodeSymbolPathSegment(string symbol)
+    {
+        if (!NeedsEncoding(symbol))
+        {
+            return symbol;
+        }
+
+        byte[] bytes = Encoding.UTF8.GetBytes(symbol);
+        var builder = new StringBuilder(EncodedSymbolPrefix, EncodedSymbolPrefix.Length + (bytes.Length * 2));
+
+        foreach (byte value in bytes)
+        {
+            _ = builder.Append(value.ToString("x2"));
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool NeedsEncoding(string symbol)
+    {
+        foreach (char c in symbol)
+        {
+            bool isSafe =
+                (c >= 'A' && c <= 'Z') ||
+                (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') ||
+                c == '.' ||
+                c == '-' ||
+                c == '_';
+
+            if (!isSafe)
+            {
+                return true;
+            }
+        }
+
+        return symbol is "." or ".." || symbol.StartsWith(EncodedSymbolPrefix, StringComparison.Ordinal);
+    }
+
+    private static string SanitizeFileNameLegacy(string name)
     {
         char[] invalidChars = Path.GetInvalidFileNameChars();
         foreach (char c in invalidChars)
@@ -283,6 +387,77 @@ public sealed class StoragePathResolver
             name = name.Replace(c, '_');
         }
         return name;
+    }
+
+    private static string ReadSymbolName(string symbolDirectory)
+    {
+        string metadataPath = Path.Combine(symbolDirectory, SymbolMetadataFileName);
+        if (File.Exists(metadataPath))
+        {
+            try
+            {
+                string symbol = File.ReadAllText(metadataPath, Encoding.UTF8);
+                if (!string.IsNullOrWhiteSpace(symbol))
+                {
+                    return symbol;
+                }
+            }
+            catch
+            {
+                // Fall back to decoding or directory name below.
+            }
+        }
+
+        string directoryName = Path.GetFileName(symbolDirectory);
+        return TryDecodeSymbolPathSegment(directoryName, out string decodedSymbol)
+            ? decodedSymbol
+            : directoryName;
+    }
+
+    private static bool TryDecodeSymbolPathSegment(string segment, out string symbol)
+    {
+        symbol = string.Empty;
+
+        if (!segment.StartsWith(EncodedSymbolPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        string hex = segment[EncodedSymbolPrefix.Length..];
+        if (hex.Length == 0 || hex.Length % 2 != 0)
+        {
+            return false;
+        }
+
+        byte[] bytes = new byte[hex.Length / 2];
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            if (!byte.TryParse(hex.AsSpan(i * 2, 2), System.Globalization.NumberStyles.HexNumber, null, out bytes[i]))
+            {
+                return false;
+            }
+        }
+
+        symbol = Encoding.UTF8.GetString(bytes);
+        return true;
+    }
+
+    private static string? FindExactTimeframeDirectory(string symbolPath, string code)
+    {
+        if (!Directory.Exists(symbolPath))
+        {
+            return null;
+        }
+
+        foreach (string dir in Directory.GetDirectories(symbolPath))
+        {
+            if (string.Equals(Path.GetFileName(dir), code, StringComparison.Ordinal))
+            {
+                return dir;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryParseTimeframeCode(string code, out CandlestickInterval timeframe)

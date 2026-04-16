@@ -7,6 +7,8 @@ namespace HistoryVault.Configuration;
 /// </summary>
 public sealed class LoadOptions
 {
+    private StorageScope? _scope;
+
     /// <summary>
     /// Gets or sets the symbol or wildcard pattern to load.
     /// Supports glob patterns: "CON.EP.*", "BTC*", "*.EP.?25"
@@ -42,7 +44,11 @@ public sealed class LoadOptions
     /// Gets or sets the storage scope to load from.
     /// Default is <see cref="StorageScope.Local"/>.
     /// </summary>
-    public StorageScope Scope { get; set; } = StorageScope.Local;
+    public StorageScope Scope
+    {
+        get => _scope ?? StorageScope.Local;
+        set => _scope = value;
+    }
 
     /// <summary>
     /// Gets or sets whether to create missing timeframes on-the-fly by aggregating from available data.
@@ -94,4 +100,6 @@ public sealed class LoadOptions
             Timeframes = timeframes.Length > 0 ? timeframes : null
         };
     }
+
+    internal StorageScope ResolveScope(StorageScope defaultScope) => _scope ?? defaultScope;
 }

@@ -763,6 +763,177 @@ public class HistoryVaultStorageTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task SaveAndLoad_SymbolWithUnsafePathChars_RoundTripsAfterRecreatingVault()
+    {
+        // Arrange
+        const string symbol = "BTC/USDT:PERP";
+        var startTime = new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var original = TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.M1, 10, startTime);
+
+        await _vault.SaveAsync(original, new SaveOptions { UseCompression = false });
+
+        await using var reloadedVault = new HistoryVaultStorage(_options);
+
+        // Act
+        var loaded = await reloadedVault.LoadAsync(LoadOptions.ForSymbol(
+            symbol,
+            startTime,
+            startTime.AddMinutes(10),
+            CandlestickInterval.M1));
+
+        // Assert
+        loaded.Should().NotBeNull();
+        loaded!.Symbol.Should().Be(symbol);
+        loaded.Timeframes[0].Candlesticks.Should().HaveCount(10);
+    }
+
+    [Fact]
+    public async Task SaveAndLoad_M1AndMonthlyTimeframes_Coexist()
+    {
+        // Arrange
+        const string symbol = "M1_MN1_COEXIST";
+        var startTime = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var data = new SymbolDataV2
+        {
+            Symbol = symbol,
+            Timeframes =
+            [
+                new TimeframeV2
+                {
+                    Timeframe = CandlestickInterval.M1,
+                    Candlesticks = TestHelpers.GenerateCandles(3, CandlestickInterval.M1, startTime)
+                },
+                new TimeframeV2
+                {
+                    Timeframe = CandlestickInterval.MN1,
+                    Candlesticks = TestHelpers.GenerateCandles(2, CandlestickInterval.MN1, startTime)
+                }
+            ]
+        };
+
+        await _vault.SaveAsync(data, new SaveOptions { UseCompression = false });
+
+        // Act
+        var loaded = await _vault.LoadAsync(new LoadOptions
+        {
+            Symbol = symbol,
+            StartDate = startTime,
+            EndDate = startTime.AddDays(61),
+            Timeframes = [CandlestickInterval.M1, CandlestickInterval.MN1]
+        });
+
+        // Assert
+        loaded.Should().NotBeNull();
+        loaded!.Timeframes.First(tf => tf.Timeframe == CandlestickInterval.M1).Candlesticks.Should().HaveCount(3);
+        loaded.Timeframes.First(tf => tf.Timeframe == CandlestickInterval.MN1).Candlesticks.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Load_WithExactEndTime_DoesNotExpandToEndOfDay()
+    {
+        // Arrange
+        const string symbol = "EXACT_END";
+        var startTime = new DateTime(2025, 8, 1, 0, 0, 0);
+        await _vault.SaveAsync(
+            TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.H1, 24, startTime),
+            new SaveOptions { UseCompression = false });
+
+        // Act
+        var loaded = await _vault.LoadAsync(new LoadOptions
+        {
+            Symbol = symbol,
+            StartDate = startTime,
+            EndDate = startTime.AddHours(12).AddMinutes(30),
+            Timeframes = [CandlestickInterval.H1]
+        });
+
+        // Assert
+        loaded.Should().NotBeNull();
+        loaded!.Timeframes[0].Candlesticks.Should().HaveCount(13);
+        loaded.Timeframes[0].Candlesticks.Max(c => c.OpenTime).Should().Be(startTime.AddHours(12));
+    }
+
+    [Fact]
+    public async Task Load_IncludePartialCandles_ControlsBoundaryOverlap()
+    {
+        // Arrange
+        const string symbol = "PARTIAL_BOUNDARY";
+        var startTime = new DateTime(2025, 9, 1, 0, 0, 0);
+        await _vault.SaveAsync(
+            TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.H1, 2, startTime),
+            new SaveOptions { UseCompression = false });
+
+        var baseOptions = new LoadOptions
+        {
+            Symbol = symbol,
+            StartDate = startTime.AddMinutes(30),
+            EndDate = startTime.AddMinutes(45),
+            Timeframes = [CandlestickInterval.H1]
+        };
+
+        // Act
+        var withPartial = await _vault.LoadAsync(baseOptions);
+        baseOptions.IncludePartialCandles = false;
+        var withoutPartial = await _vault.LoadAsync(baseOptions);
+
+        // Assert
+        withPartial.Should().NotBeNull();
+        withPartial!.Timeframes[0].Candlesticks.Should().HaveCount(1);
+        withoutPartial.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Load_WithWarmupButNoStartDate_DoesNotThrow()
+    {
+        // Arrange
+        const string symbol = "WARMUP_NO_START";
+        var startTime = new DateTime(2025, 10, 1, 0, 0, 0);
+        await _vault.SaveAsync(
+            TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.H1, 3, startTime),
+            new SaveOptions { UseCompression = false });
+
+        // Act
+        var action = async () => await _vault.LoadAsync(new LoadOptions
+        {
+            Symbol = symbol,
+            Timeframes = [CandlestickInterval.H1],
+            WarmupCandlesCount = 5
+        });
+
+        // Assert
+        await action.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task Save_WithoutPartialOverwrite_RemovesStaleMonths()
+    {
+        // Arrange
+        const string symbol = "REPLACE_STALE_MONTHS";
+        var jan1 = new DateTime(2025, 1, 1, 0, 0, 0);
+
+        await _vault.SaveAsync(
+            TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.H1, 60 * 24, jan1),
+            new SaveOptions { UseCompression = false, AllowPartialOverwrite = false });
+
+        await _vault.SaveAsync(
+            TestHelpers.GenerateSymbolData(symbol, CandlestickInterval.H1, 24, jan1),
+            new SaveOptions { UseCompression = false, AllowPartialOverwrite = false });
+
+        // Act
+        var loaded = await _vault.LoadAsync(new LoadOptions
+        {
+            Symbol = symbol,
+            StartDate = jan1,
+            EndDate = jan1.AddMonths(3),
+            Timeframes = [CandlestickInterval.H1]
+        });
+
+        // Assert
+        loaded.Should().NotBeNull();
+        loaded!.Timeframes[0].Candlesticks.Should().HaveCount(24);
+    }
+
     private static void AssertCandleEquality(CandlestickV2 expected, CandlestickV2 actual, CandlestickInterval timeframe)
     {
         actual.OpenTime.Should().Be(expected.OpenTime, $"OpenTime mismatch for {timeframe}");

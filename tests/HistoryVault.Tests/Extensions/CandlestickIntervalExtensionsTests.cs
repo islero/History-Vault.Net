@@ -77,7 +77,7 @@ public class CandlestickIntervalExtensionsTests
     [InlineData(CandlestickInterval.H4, "4h")]
     [InlineData(CandlestickInterval.D1, "1d")]
     [InlineData(CandlestickInterval.W1, "1w")]
-    [InlineData(CandlestickInterval.MN1, "1M")]
+    [InlineData(CandlestickInterval.MN1, "1mo")]
     public void ToShortCode_ReturnsCorrectCode(CandlestickInterval interval, string expected)
     {
         interval.ToShortCode().Should().Be(expected);
@@ -90,6 +90,7 @@ public class CandlestickIntervalExtensionsTests
     [InlineData("4h", CandlestickInterval.H4)]
     [InlineData("1d", CandlestickInterval.D1)]
     [InlineData("1w", CandlestickInterval.W1)]
+    [InlineData("1mo", CandlestickInterval.MN1)]
     [InlineData("1M", CandlestickInterval.MN1)]
     public void FromShortCode_ReturnsCorrectInterval(string code, CandlestickInterval expected)
     {

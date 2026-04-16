@@ -12,6 +12,7 @@ A high-performance market data storage library for .NET HFT/HPC systems. Store, 
 - **High-Performance Binary Serialization**: Optimized for HFT/HPC with Span<byte>, ArrayPool, and zero-allocation patterns
 - **GZip Compression**: Optional compression with configurable levels
 - **Cross-Platform Storage**: Automatic platform-specific path resolution for Windows, macOS, and Linux
+- **Safe Symbol Paths**: Encodes path-unsafe symbol names while preserving the original symbol for reloads
 - **Timeframe Aggregation**: Aggregate candlesticks from smaller to larger timeframes (M1 → M5 → H1 → D1)
 - **Partial Overwrite**: Merge new data with existing data, preserving non-overlapping candles
 - **Wildcard Symbol Matching**: Glob pattern support for symbol lookup (e.g., `BTC.*`, `*.USD`)
@@ -172,17 +173,17 @@ var data = await vault.LoadAsync(loadOptions);
 
 **Automatic Path Resolution:**
 - **Local scope**: `./data/history-vault/` (relative to current working directory)
-- **Global scope**: OS temp directory + `/HistoryVault`
-  - Windows: `C:\Users\<user>\AppData\Local\Temp\HistoryVault`
-  - macOS: `/var/folders/.../T/HistoryVault`
-  - Linux: `/tmp/HistoryVault`
+- **Global scope**: OS-specific application data directory
+  - Windows: `%LOCALAPPDATA%\HistoryVault`
+  - macOS: `~/Library/Application Support/HistoryVault`
+  - Linux: `$XDG_DATA_HOME/HistoryVault` or `~/.local/share/HistoryVault`
 
 #### SaveOptions
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `UseCompression` | bool | true | Enable GZip compression |
-| `AllowPartialOverwrite` | bool | false | Merge with existing data |
+| `AllowPartialOverwrite` | bool | true | Merge with existing data |
 | `CompressionLevel` | CompressionLevel | Optimal | GZip compression level |
 | `Scope` | StorageScope | Local | Storage scope |
 
@@ -218,7 +219,7 @@ var data = await vault.LoadAsync(loadOptions);
 | D1 | 1d | 86400 |
 | D3 | 3d | 259200 |
 | W1 | 1w | 604800 |
-| MN1 | 1M | 2592000 |
+| MN1 | 1mo | 2592000 |
 
 ## Storage Format
 
@@ -247,8 +248,8 @@ Example:
 
 ### Binary Format
 
-- **Header**: 64 bytes (magic number, version, symbol, timeframe, count, date range, checksums)
-- **Records**: 96 bytes per candlestick (timestamps, OHLCV as decimals, flags)
+- **Header**: 64 bytes (magic number, version, flags, timeframe, record count, date range)
+- **Records**: 96 bytes per candlestick (timestamps and OHLCV decimals)
 
 ## Performance Benchmarks
 

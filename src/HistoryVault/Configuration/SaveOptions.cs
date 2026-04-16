@@ -8,6 +8,8 @@ namespace HistoryVault.Configuration;
 /// </summary>
 public sealed class SaveOptions
 {
+    private StorageScope? _scope;
+
     /// <summary>
     /// Gets or sets whether to use GZip compression when saving data.
     /// Compression reduces disk usage but increases load time.
@@ -32,7 +34,11 @@ public sealed class SaveOptions
     /// Gets or sets the storage scope (Local or Global).
     /// Default is <see cref="StorageScope.Local"/>.
     /// </summary>
-    public StorageScope Scope { get; set; } = StorageScope.Local;
+    public StorageScope Scope
+    {
+        get => _scope ?? StorageScope.Local;
+        set => _scope = value;
+    }
 
     /// <summary>
     /// Gets or sets the target timeframes to persist.
@@ -80,4 +86,6 @@ public sealed class SaveOptions
         UseCompression = true,
         CompressionLevel = CompressionLevel.SmallestSize
     };
+
+    internal StorageScope ResolveScope(StorageScope defaultScope) => _scope ?? defaultScope;
 }

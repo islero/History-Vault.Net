@@ -2,10 +2,10 @@
 
   <PropertyGroup>
     <PackageId>HistoryVault</PackageId>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Authors>HistoryVault Contributors</Authors>
     <Copyright>Copyright (c) 2025 HistoryVault.Net Contributors</Copyright>
-    <Description>Ultra-fast market data storage for .NET HFT backtesting systems with compression, aggregation, and cross-platform support.</Description>
+    <Description>Reliable high-performance market data storage for .NET HFT and backtesting systems with atomic persistence, safe symbol paths, compression, aggregation, and availability checks.</Description>
     <PackageTags>hft;trading;market-data;hpc;backtest;quantitative;finance;candlestick;ohlcv;history-vault</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -13,10 +13,10 @@
     <PackageProjectUrl>https://github.com/islero/HistoryVault.Net</PackageProjectUrl>
     <RepositoryUrl>https://github.com/islero/HistoryVault.Net.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.0.2</AssemblyVersion>
-    <FileVersion>1.0.2</FileVersion>
+    <AssemblyVersion>1.0.3</AssemblyVersion>
+    <FileVersion>1.0.3</FileVersion>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageReleaseNotes>Refine `TimeRangeIndex` and `DateRange` to enable timeframe-based tolerance for gap detection and merging logic.</PackageReleaseNotes>
+    <PackageReleaseNotes>Fix reload reliability for unsafe symbol names, monthly timeframe paths, exact date ranges, warmup handling, atomic writes, and full timeframe replacement.</PackageReleaseNotes>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

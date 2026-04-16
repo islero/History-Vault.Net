@@ -90,6 +90,33 @@ public class BinarySerializerTests
     }
 
     [Fact]
+    public void BinarySerializer_DateTimeKind_IsPreserved()
+    {
+        // Arrange
+        var candle = new CandlestickV2
+        {
+            OpenTime = new DateTime(2025, 1, 1, 10, 0, 0, DateTimeKind.Utc),
+            CloseTime = new DateTime(2025, 1, 1, 10, 59, 59, DateTimeKind.Utc),
+            Open = 100m,
+            High = 101m,
+            Low = 99m,
+            Close = 100.5m,
+            Volume = 10m
+        };
+
+        // Act
+        var (buffer, length) = _serializer.Serialize(new[] { candle }, CandlestickInterval.H1, false);
+        var (deserialized, header) = _serializer.Deserialize(buffer.AsSpan(0, length));
+        _serializer.ReturnBuffer(buffer);
+
+        // Assert
+        header.FirstTimestamp.Kind.Should().Be(DateTimeKind.Utc);
+        header.LastTimestamp.Kind.Should().Be(DateTimeKind.Utc);
+        deserialized[0].OpenTime.Kind.Should().Be(DateTimeKind.Utc);
+        deserialized[0].CloseTime.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact]
     public void BinarySerializer_EmptyCandles_ProducesValidEmptyFile()
     {
         // Arrange

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Planned
+
+- Performance optimizations for large datasets
+- Memory-mapped file support
+- Async streaming for large loads
+- Data integrity verification on load
+
+## [1.0.3] - 2026-04-16
+
+### Fixed
+
+- Preserve reloadability for symbols containing path-unsafe characters by storing original symbol metadata and using encoded paths for unsafe names.
+- Avoid `M1`/`MN1` path collisions on case-insensitive file systems by writing monthly data under `1mo` while keeping legacy `1M` parsing.
+- Respect `HistoryVaultOptions.DefaultScope` when operation options do not explicitly set a scope.
+- Use application data directories for global storage instead of temporary directories.
+- Preserve `DateTimeKind` in newly written binary files while retaining compatibility with version 1 files.
+- Avoid broadening exact `EndDate` values to the end of the day when a time component is supplied.
+- Honor `IncludePartialCandles` for boundary-overlapping candles.
+- Prevent warmup loading from underflowing `DateTime.MinValue` and from calling fixed-duration logic for `Tick`/`Custom`.
+- Replace whole timeframe directories when `AllowPartialOverwrite` is false so stale months do not reload.
+- Write month files through a temporary file and atomic move to reduce truncated/corrupt files after interrupted writes.
+
 ## [1.0.0] - 2025-01-23
 
 ### Added
@@ -69,12 +93,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HistoryVaultOptions` - Global configuration
 - `SaveOptions` - Save operation options
 - `LoadOptions` - Load operation options
-
-## [Unreleased]
-
-### Planned
-
-- Performance optimizations for large datasets
-- Memory-mapped file support
-- Async streaming for large loads
-- Data integrity verification on load

@@ -19,7 +19,7 @@ public sealed class BinarySerializer
     /// <summary>
     /// Current format version.
     /// </summary>
-    public const ushort CurrentVersion = 1;
+    public const ushort CurrentVersion = 2;
 
     /// <summary>
     /// Header size in bytes.
@@ -137,7 +137,7 @@ public sealed class BinarySerializer
                 $"Buffer too small for records. Expected {expectedSize} bytes, got {buffer.Length}.");
         }
 
-        var candles = ReadRecords(buffer[HeaderSize..], header.RecordCount);
+        var candles = ReadRecords(buffer[HeaderSize..], header.RecordCount, header.Version);
         return (candles, header);
     }
 
@@ -183,7 +183,7 @@ public sealed class BinarySerializer
                         $"Could not read records. Expected {recordsSize} bytes, got {bytesRead}.");
                 }
 
-                var candles = ReadRecords(recordBuffer.AsSpan(0, recordsSize), header.RecordCount);
+                var candles = ReadRecords(recordBuffer.AsSpan(0, recordsSize), header.RecordCount, header.Version);
                 return (candles, header);
             }
             finally
@@ -251,8 +251,8 @@ public sealed class BinarySerializer
         BinaryPrimitives.WriteUInt16LittleEndian(span[4..], CurrentVersion);
         BinaryPrimitives.WriteUInt16LittleEndian(span[6..], isCompressed ? FlagCompressed : (ushort)0);
         BinaryPrimitives.WriteInt64LittleEndian(span[8..], candles.Count);
-        BinaryPrimitives.WriteInt64LittleEndian(span[16..], candles[0].OpenTime.Ticks);
-        BinaryPrimitives.WriteInt64LittleEndian(span[24..], candles[^1].CloseTime.Ticks);
+        BinaryPrimitives.WriteInt64LittleEndian(span[16..], candles[0].OpenTime.ToBinary());
+        BinaryPrimitives.WriteInt64LittleEndian(span[24..], candles[^1].CloseTime.ToBinary());
         BinaryPrimitives.WriteInt32LittleEndian(span[32..], (int)timeframe);
         span[36..64].Clear(); // Reserved
     }
@@ -264,8 +264,8 @@ public sealed class BinarySerializer
             var candle = candles[i];
             var recordSpan = span.Slice(i * RecordSize, RecordSize);
 
-            BinaryPrimitives.WriteInt64LittleEndian(recordSpan, candle.OpenTime.Ticks);
-            BinaryPrimitives.WriteInt64LittleEndian(recordSpan[8..], candle.CloseTime.Ticks);
+            BinaryPrimitives.WriteInt64LittleEndian(recordSpan, candle.OpenTime.ToBinary());
+            BinaryPrimitives.WriteInt64LittleEndian(recordSpan[8..], candle.CloseTime.ToBinary());
             WriteDecimal(recordSpan[16..], candle.Open);
             WriteDecimal(recordSpan[32..], candle.High);
             WriteDecimal(recordSpan[48..], candle.Low);
@@ -276,14 +276,16 @@ public sealed class BinarySerializer
 
     private static HeaderInfo ReadHeader(ReadOnlySpan<byte> span)
     {
+        ushort version = BinaryPrimitives.ReadUInt16LittleEndian(span[4..]);
+
         return new HeaderInfo
         {
             Magic = span[..4].ToArray(),
-            Version = BinaryPrimitives.ReadUInt16LittleEndian(span[4..]),
+            Version = version,
             Flags = BinaryPrimitives.ReadUInt16LittleEndian(span[6..]),
             RecordCount = (int)BinaryPrimitives.ReadInt64LittleEndian(span[8..]),
-            FirstTimestamp = new DateTime(BinaryPrimitives.ReadInt64LittleEndian(span[16..])),
-            LastTimestamp = new DateTime(BinaryPrimitives.ReadInt64LittleEndian(span[24..])),
+            FirstTimestamp = ReadDateTime(BinaryPrimitives.ReadInt64LittleEndian(span[16..]), version),
+            LastTimestamp = ReadDateTime(BinaryPrimitives.ReadInt64LittleEndian(span[24..]), version),
             Timeframe = (CandlestickInterval)BinaryPrimitives.ReadInt32LittleEndian(span[32..])
         };
     }
@@ -307,7 +309,7 @@ public sealed class BinarySerializer
         }
     }
 
-    private static List<CandlestickV2> ReadRecords(ReadOnlySpan<byte> span, int count)
+    private static List<CandlestickV2> ReadRecords(ReadOnlySpan<byte> span, int count, ushort version)
     {
         var candles = new List<CandlestickV2>(count);
 
@@ -317,8 +319,8 @@ public sealed class BinarySerializer
 
             candles.Add(new CandlestickV2
             {
-                OpenTime = new DateTime(BinaryPrimitives.ReadInt64LittleEndian(recordSpan)),
-                CloseTime = new DateTime(BinaryPrimitives.ReadInt64LittleEndian(recordSpan[8..])),
+                OpenTime = ReadDateTime(BinaryPrimitives.ReadInt64LittleEndian(recordSpan), version),
+                CloseTime = ReadDateTime(BinaryPrimitives.ReadInt64LittleEndian(recordSpan[8..]), version),
                 Open = ReadDecimal(recordSpan[16..]),
                 High = ReadDecimal(recordSpan[32..]),
                 Low = ReadDecimal(recordSpan[48..]),
@@ -328,6 +330,13 @@ public sealed class BinarySerializer
         }
 
         return candles;
+    }
+
+    private static DateTime ReadDateTime(long value, ushort version)
+    {
+        return version >= 2
+            ? DateTime.FromBinary(value)
+            : new DateTime(value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

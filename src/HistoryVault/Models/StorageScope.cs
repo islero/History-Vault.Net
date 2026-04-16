@@ -14,7 +14,7 @@ public enum StorageScope
     /// <summary>
     /// Global storage in the user's application data directory.
     /// Platform-specific locations:
-    /// - Windows: %APPDATA%\HistoryVault
+    /// - Windows: %LOCALAPPDATA%\HistoryVault
     /// - macOS: ~/Library/Application Support/HistoryVault
     /// - Linux: ~/.local/share/HistoryVault
     /// </summary>

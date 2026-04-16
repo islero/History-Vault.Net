@@ -19,7 +19,7 @@ public sealed class HistoryVaultOptions
     /// Primarily intended for testing scenarios.
     /// If null (default), paths are automatically resolved based on <see cref="StorageScope"/>:
     /// - Local: ./data/history-vault/ (relative to current working directory)
-    /// - Global: OS temp directory/HistoryVault (e.g., /tmp/HistoryVault on Unix)
+    /// - Global: OS-specific application data directory.
     /// </summary>
     public string? BasePathOverride { get; set; }
 

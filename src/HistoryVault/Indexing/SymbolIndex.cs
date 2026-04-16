@@ -52,8 +52,11 @@ public sealed class SymbolIndex
             // Check if it's a literal (no wildcards)
             if (!ContainsWildcard(pattern))
             {
-                return allSymbols.Contains(pattern)
-                    ? new List<string> { pattern }
+                string? matchingSymbol = allSymbols.FirstOrDefault(
+                    s => string.Equals(s, pattern, StringComparison.OrdinalIgnoreCase));
+
+                return matchingSymbol != null
+                    ? new List<string> { matchingSymbol }
                     : (IReadOnlyList<string>)Array.Empty<string>();
             }
 
@@ -127,7 +130,7 @@ public sealed class SymbolIndex
         }
     }
 
-    private HashSet<string> GetAllSymbolsCached(StorageScope scope)
+    private List<string> GetAllSymbolsCached(StorageScope scope)
     {
         lock (_lock)
         {
@@ -135,7 +138,7 @@ public sealed class SymbolIndex
                 _cacheTimestamps.TryGetValue(scope, out var timestamp) &&
                 DateTime.UtcNow - timestamp < CacheExpiration)
             {
-                return cached;
+                return cached.ToList();
             }
 
             var symbols = new HashSet<string>(
@@ -145,7 +148,7 @@ public sealed class SymbolIndex
             _symbolCache[scope] = symbols;
             _cacheTimestamps[scope] = DateTime.UtcNow;
 
-            return symbols;
+            return symbols.ToList();
         }
     }
 

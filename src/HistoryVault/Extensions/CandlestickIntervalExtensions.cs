@@ -135,7 +135,7 @@ public static class CandlestickIntervalExtensions
             CandlestickInterval.D1 => "1d",
             CandlestickInterval.D3 => "3d",
             CandlestickInterval.W1 => "1w",
-            CandlestickInterval.MN1 => "1M",
+            CandlestickInterval.MN1 => "1mo",
             CandlestickInterval.Custom => "custom",
             _ => $"{(int)interval}s"
         };
@@ -149,7 +149,7 @@ public static class CandlestickIntervalExtensions
     /// <exception cref="ArgumentException">Thrown when the code is not recognized.</exception>
     public static CandlestickInterval FromShortCode(string code)
     {
-        // Handle month (1M) before lowercase conversion to distinguish from 1m (minute)
+        // Support the legacy "1M" code for backward compatibility with existing stores.
         if (code == "1M")
         {
             return CandlestickInterval.MN1;
@@ -174,6 +174,7 @@ public static class CandlestickIntervalExtensions
             "1d" => CandlestickInterval.D1,
             "3d" => CandlestickInterval.D3,
             "1w" => CandlestickInterval.W1,
+            "1mo" => CandlestickInterval.MN1,
             "custom" => CandlestickInterval.Custom,
             _ => throw new ArgumentException($"Unrecognized interval code: {code}", nameof(code))
         };

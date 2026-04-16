@@ -68,9 +68,8 @@ public static class TestHelpers
     }
 
     /// <summary>
-    /// All standard timeframes for multi-timeframe generation.
-    /// Note: MN1 is excluded because its short code "1M" collides with M1's "1m"
-    /// on case-insensitive filesystems (macOS default, Windows).
+    /// Common standard timeframes for multi-timeframe generation.
+    /// MN1 is covered by targeted tests because it spans much larger date ranges.
     /// </summary>
     public static readonly CandlestickInterval[] AllTimeframes =
     [
@@ -85,8 +84,7 @@ public static class TestHelpers
     ];
 
     /// <summary>
-    /// All timeframes including MN1. Only use on case-sensitive filesystems
-    /// or when M1 is not included in the same test.
+    /// All timeframes including MN1.
     /// </summary>
     public static readonly CandlestickInterval[] AllTimeframesIncludingMonthly =
     [
